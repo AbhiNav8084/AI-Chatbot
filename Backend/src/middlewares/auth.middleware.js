@@ -25,7 +25,7 @@ async function authUser(req, res, next) {
 
     } catch (err) {
         res.status(401).json({
-            message: "Unauthorized "
+            message: "Unauthorized"
         });
     }
 
