@@ -1,171 +1,173 @@
-import { useState, useRef, useEffect } from "react";
-import {
-  FiMenu,
-  FiPlusCircle,
-  FiPaperclip,
-  FiArrowUp,
-  FiClock,
-  FiArchive,
-  FiSettings,
-  FiHelpCircle,
-  FiLogOut,
-} from "react-icons/fi";
+import { useEffect, useRef, useState } from "react";
+import axios from "axios";
+import { io } from "socket.io-client";
 
+import ChatInput from "../components/ChatInput.jsx";
+import ChatMessages from "../components/ChatMessages.jsx";
+import ChatSidebar from "../components/ChatSidebar.jsx";
+import ChatTopbar from "../components/ChatTopbar.jsx";
 import "../styles/home.css";
 
-const initialMessages = [
-  {
-    id: 1,
-    role: "assistant",
-    text: "Imagine you're trying to find a specific name in a giant phone book.\n\nA regular computer is like reading every single name, one by one, from the first page to the last until you find it. It works, but it takes time.\n\nA quantum computer is like magically looking at every single page in the book at the exact same time.",
-  },
-];
+const API_URL = "http://localhost:3000";
 
 export default function Home() {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [messages, setMessages] = useState(initialMessages);
-  const [input, setInput] = useState("");
+  const [messages, setMessages] = useState([]);
+  const [userInput, setUserInput] = useState("");
+  const [previousChats, setPreviousChats] = useState([]);
+  const [activeChat, setActiveChat] = useState(null);
+  const [isAiTyping, setIsAiTyping] = useState(false);
+  const [connectionError, setConnectionError] = useState("");
+  const [hasAttemptedChat, setHasAttemptedChat] = useState(false);
 
   const canvasRef = useRef(null);
+  const socketRef = useRef(null);
+
+  useEffect(() => {
+    const socket = io(API_URL, {
+      withCredentials: true,
+      transports: ["websocket"],
+    });
+
+    socketRef.current = socket;
+
+    socket.on("connect", () => {
+      setConnectionError("");
+    });
+
+    socket.on("connect_error", (err) => {
+      setIsAiTyping(false);
+      setConnectionError(err.message || "Unable to connect to AI.");
+    });
+
+    socket.on("ai-response", (payload) => {
+      const aiMessage = {
+        id: `${payload.chat}-${Date.now()}`,
+        role: "assistant",
+        text: payload.content,
+      };
+
+      setMessages((prev) => [...prev, aiMessage]);
+      setIsAiTyping(false);
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
 
   useEffect(() => {
     if (canvasRef.current) {
       canvasRef.current.scrollTop = canvasRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, isAiTyping]);
 
-  const handleSend = (e) => {
+  const createChat = async (firstMessage = "") => {
+    const fallbackTitle = "New Chat";
+    const title = firstMessage.trim()
+      ? firstMessage.trim().slice(0, 42)
+      : fallbackTitle;
+
+    const res = await axios.post(
+      `${API_URL}/api/chat`,
+      { title },
+      { withCredentials: true }
+    );
+
+    const chat = res.data.chat;
+
+    setPreviousChats((prev) => {
+      const chatAlreadyExists = prev.some((item) => item._id === chat._id);
+      return chatAlreadyExists ? prev : [chat, ...prev];
+    });
+
+    setActiveChat(chat);
+    return chat;
+  };
+
+  const handleNewChat = () => {
+    setMessages([]);
+    setActiveChat(null);
+    setUserInput("");
+    setIsAiTyping(false);
+    setConnectionError("");
+    setHasAttemptedChat(false);
+    setMobileOpen(false);
+  };
+
+  const handleSelectChat = (chat) => {
+    setActiveChat(chat);
+    setMessages([]);
+    setMobileOpen(false);
+  };
+
+  const handleSend = async (e) => {
     e.preventDefault();
 
-    if (!input.trim()) return;
+    const content = userInput.trim();
+    if (!content || isAiTyping) return;
 
-    const userMsg = {
+    const userMessage = {
       id: Date.now(),
       role: "user",
-      text: input,
+      text: content,
     };
 
-    setMessages((prev) => [...prev, userMsg]);
+    setMessages((prev) => [...prev, userMessage]);
+    setUserInput("");
+    setConnectionError("");
+    setHasAttemptedChat(true);
+    setIsAiTyping(true);
 
-    setInput("");
+    try {
+      const chat = activeChat || (await createChat(content));
 
-    setTimeout(() => {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now() + 1,
-          role: "assistant",
-          text: "This is a sample assistant reply.",
-        },
-      ]);
-    }, 700);
+      socketRef.current?.emit("ai-message", {
+        chat: chat._id,
+        content,
+      });
+    } catch (err) {
+      setIsAiTyping(false);
+      setConnectionError(
+        err?.response?.data?.message || err.message || "Message failed."
+      );
+    }
   };
 
   return (
     <main className="home">
-      <aside className={`sidebar ${mobileOpen ? "open" : ""}`}>
-        <div className="profile">
-          <div className="avatar" />
-
-          <div>
-            <h3>AI_ASSISTANT</h3>
-            <span>PRO_PLAN</span>
-          </div>
-        </div>
-
-        <button className="new-chat">
-          <FiPlusCircle />
-          NEW_CHAT
-        </button>
-
-        <nav>
-          <a href="#">
-            <FiPlusCircle />
-            NEW_CHAT
-          </a>
-
-          <a href="#">
-            <FiClock />
-            HISTORY
-          </a>
-
-          <a href="#">
-            <FiArchive />
-            ARCHIVE
-          </a>
-
-          <a href="#" className="active">
-            <FiSettings />
-            SETTINGS
-          </a>
-        </nav>
-
-        <div className="sidebar-bottom">
-          <a href="#">
-            <FiHelpCircle />
-            HELP
-          </a>
-
-          <a href="#">
-            <FiLogOut />
-            LOGOUT
-          </a>
-        </div>
-      </aside>
+      <ChatSidebar
+        activeChat={activeChat}
+        mobileOpen={mobileOpen}
+        onNewChat={handleNewChat}
+        onSelectChat={handleSelectChat}
+        previousChats={previousChats}
+      />
 
       {mobileOpen && (
         <div className="overlay" onClick={() => setMobileOpen(false)} />
       )}
 
       <section className="chat-section">
-        <header className="topbar">
-          <button
-            className="icon-btn mobile-only"
-            onClick={() => setMobileOpen(true)}
-          >
-            <FiMenu />
-          </button>
+        <ChatTopbar
+          onNewChat={handleNewChat}
+          onOpenSidebar={() => setMobileOpen(true)}
+        />
 
-          <h1>GPT-40</h1>
+        <ChatMessages
+          connectionError={connectionError}
+          hasAttemptedChat={hasAttemptedChat}
+          isAiTyping={isAiTyping}
+          messages={messages}
+          ref={canvasRef}
+        />
 
-          <button className="icon-btn">
-            <FiPlusCircle />
-          </button>
-        </header>
-
-        <div className="chat-body" ref={canvasRef}>
-          {messages.length === 0 && (
-            <div className="empty-state">
-              <div className="robot">🤖</div>
-
-              <h2>HOW CAN I HELP YOU TODAY?</h2>
-
-              <div className="suggestion">
-                Explain quantum computing in simple terms.
-              </div>
-            </div>
-          )}
-
-          {messages.map((msg) => (
-            <div key={msg.id} className={`message ${msg.role}`}>
-              {msg.text}
-            </div>
-          ))}
-        </div>
-
-        <form className="input-wrapper" onSubmit={handleSend}>
-          <FiPaperclip />
-
-          <input
-            placeholder="Message GPT-40..."
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-          />
-
-          <button type="submit">
-            <FiArrowUp />
-          </button>
-        </form>
+        <ChatInput
+          isAiTyping={isAiTyping}
+          onInputChange={setUserInput}
+          onSend={handleSend}
+          userInput={userInput}
+        />
 
         <div className="footer-note">
           AI CAN MAKE MISTAKES. CHECK IMPORTANT INFO.
