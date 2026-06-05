@@ -1,4 +1,5 @@
 import { forwardRef } from "react";
+import ThreeDEffects from "./ThreeDEffects";
 
 const ChatMessages = forwardRef(function ChatMessages(
   { connectionError, hasAttemptedChat, isAiTyping, messages },
@@ -16,16 +17,19 @@ const ChatMessages = forwardRef(function ChatMessages(
       ref={ref}
     >
       {shouldShowWelcome && (
-        <div className="empty-state">
-          <span className="preview-badge">Early Preview</span>
+        <div className="empty-state-wrapper">
+          <ThreeDEffects />
+          <div className="empty-state">
+            <span className="preview-badge">Early Preview</span>
 
-          <h2>ChatGPT Clone</h2>
+            <h2>ChatGPT Clone</h2>
 
-          <p>
-            Ask anything. Paste text, brainstorm ideas, or get quick
-            explanations. Your chats stay in the sidebar so you can pick up
-            where you left off.
-          </p>
+            <p>
+              Ask anything. Paste text, brainstorm ideas, or get quick
+              explanations. Your chats stay in the sidebar so you can pick up
+              where you left off.
+            </p>
+          </div>
         </div>
       )}
 

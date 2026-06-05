@@ -9,6 +9,27 @@
   --sidebar-width: 270px;
 }
 
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes glow {
+  0%,
+  100% {
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(255, 255, 255, 0.15);
+  }
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -273,49 +294,79 @@ body,
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 16px;
   overflow: hidden;
   text-align: center;
   transform: translateY(-4vh);
-  background: radial-gradient(circle at center, rgba(255, 255, 255, 0.05) 0%, transparent 70%);
-  border-radius: 20px;
   padding: 40px 20px;
+  position: relative;
+  z-index: 2;
+}
+
+.empty-state-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .preview-badge {
   display: inline-flex;
   align-items: center;
-  min-height: 24px;
-  border: 1px solid #343434;
-  border-radius: 999px;
-  background: linear-gradient(90deg, #171717 0%, #232323 100%);
-  color: #d8d8d8;
-  padding: 0 10px;
-  font-size: 11px;
-  font-weight: 700;
+  min-height: 28px;
+  border: 1px solid #404040;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  color: #e0e0e0;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 500;
   line-height: 1;
+  letter-spacing: 0.5px;
+  animation: fadeInScale 0.8s ease-out -0.1s both;
+  text-transform: uppercase;
 }
 
 .empty-state h2 {
-  background: linear-gradient(135deg, #f4f4f4 0%, #a0a0a0 50%, #707070 100%);
+  background: linear-gradient(
+    180deg,
+    #ffffff 0%,
+    #e0e0e0 30%,
+    #b0b0b0 70%,
+    #808080 100%
+  );
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  font-size: clamp(28px, 9vw, 40px);
-  font-weight: 800;
-  line-height: 1.08;
-  letter-spacing: 0;
+  font-size: clamp(28px, 9vw, 56px);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.5px;
+  animation: fadeInScale 0.8s ease-out;
 }
 
 .empty-state p {
   max-width: 360px;
-  background: linear-gradient(135deg, #c9c9c9 0%, #888888 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  font-size: clamp(13px, 3.6vw, 15px);
-  font-weight: 700;
-  line-height: 1.45;
+  color: #c9c9c9;
+  font-size: clamp(14px, 3.6vw, 16px);
+  font-weight: 400;
+  line-height: 1.6;
+  letter-spacing: 0.2px;
+  animation: fadeInScale 0.8s ease-out 0.1s both;
+}
+
+.three-d-container {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  background: radial-gradient(circle at center, rgba(255, 255, 255, 0.03) 0%, transparent 70%);
+  pointer-events: all;
+  border-radius: 20px;
 }
 
 .input-wrapper {
