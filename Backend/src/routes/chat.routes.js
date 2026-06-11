@@ -5,8 +5,11 @@ const chatController = require("../controllers/chat.controller");
 
 const router = express.Router();
 
+/* - GET /api/chat/ */
+router.get("/", authMiddleware.authUser, chatController.getChats);
+
 /* - POST /api/chat/ */
-router.post("/", authMiddleware.authUser, chatController.createChat)
+router.post("/", authMiddleware.authUser, chatController.createChat);
 
 
 

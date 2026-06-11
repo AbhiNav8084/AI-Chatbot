@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import axios from "axios";
 import { io } from "socket.io-client";
 
@@ -7,21 +8,50 @@ import ChatMessages from "../components/ChatMessages.jsx";
 import ChatSidebar from "../components/ChatSidebar.jsx";
 import ChatTopbar from "../components/ChatTopbar.jsx";
 import "../styles/home.css";
+import {
+  addChat,
+  appendMessage,
+  clearMessages,
+  setChats,
+  setCurrentChat,
+} from "../store/chatSlice.js";
 
 const API_URL = "http://localhost:3000";
 
 export default function Home() {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [messages, setMessages] = useState([]);
   const [userInput, setUserInput] = useState("");
-  const [previousChats, setPreviousChats] = useState([]);
-  const [activeChat, setActiveChat] = useState(null);
   const [isAiTyping, setIsAiTyping] = useState(false);
   const [connectionError, setConnectionError] = useState("");
   const [hasAttemptedChat, setHasAttemptedChat] = useState(false);
 
+  const dispatch = useDispatch();
+  const messages = useSelector((state) => state.chat?.messages ?? []);
+  const previousChats = useSelector((state) => state.chat?.chats ?? []);
+  const activeChat = useSelector((state) => state.chat?.currentChat ?? null);
+
   const canvasRef = useRef(null);
   const socketRef = useRef(null);
+
+  useEffect(() => {
+    const fetchChats = async () => {
+      try {
+        const res = await axios.get(`${API_URL}/api/chat`, {
+          withCredentials: true,
+        });
+
+        const chats = res.data.chats || [];
+        dispatch(setChats(chats));
+        if (chats.length > 0) {
+          dispatch(setCurrentChat(chats[0]));
+        }
+      } catch (err) {
+        console.warn("Failed to load chats:", err);
+      }
+    };
+
+    fetchChats();
+  }, [dispatch]);
 
   useEffect(() => {
     const socket = io(API_URL, {
@@ -47,7 +77,7 @@ export default function Home() {
         text: payload.content,
       };
 
-      setMessages((prev) => [...prev, aiMessage]);
+      dispatch(appendMessage(aiMessage));
       setIsAiTyping(false);
     });
 
@@ -62,11 +92,9 @@ export default function Home() {
     }
   }, [messages, isAiTyping]);
 
-  const createChat = async (firstMessage = "") => {
-    const fallbackTitle = "New Chat";
-    const title = firstMessage.trim()
-      ? firstMessage.trim().slice(0, 42)
-      : fallbackTitle;
+
+  const createChat = async (titleInput = "") => {
+    const title = titleInput.trim() ? titleInput.trim().slice(0, 42) : "New Chat";
 
     const res = await axios.post(
       `${API_URL}/api/chat`,
@@ -76,29 +104,39 @@ export default function Home() {
 
     const chat = res.data.chat;
 
-    setPreviousChats((prev) => {
-      const chatAlreadyExists = prev.some((item) => item._id === chat._id);
-      return chatAlreadyExists ? prev : [chat, ...prev];
-    });
+    dispatch(addChat(chat));
+    dispatch(setCurrentChat(chat));
+    dispatch(clearMessages());
 
-    setActiveChat(chat);
     return chat;
   };
 
-  const handleNewChat = () => {
-    setMessages([]);
-    setActiveChat(null);
+  const handleNewChat = async () => {
+    const titlePrompt = window.prompt("Enter a title for the new chat:", "New Chat");
+    if (titlePrompt === null) return;
+
     setUserInput("");
     setIsAiTyping(false);
     setConnectionError("");
     setHasAttemptedChat(false);
     setMobileOpen(false);
+    dispatch(clearMessages());
+
+    try {
+      await createChat(titlePrompt);
+    } catch (err) {
+      setConnectionError(
+        err?.response?.data?.message || err.message || "Unable to create new chat."
+      );
+    }
   };
 
   const handleSelectChat = (chat) => {
-    setActiveChat(chat);
-    setMessages([]);
+    dispatch(setCurrentChat(chat));
+    dispatch(clearMessages());
     setMobileOpen(false);
+    setConnectionError("");
+    setHasAttemptedChat(false);
   };
 
   const handleSend = async (e) => {
@@ -113,7 +151,7 @@ export default function Home() {
       text: content,
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    dispatch(appendMessage(userMessage));
     setUserInput("");
     setConnectionError("");
     setHasAttemptedChat(true);
