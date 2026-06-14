@@ -9,9 +9,14 @@ const { createMemory, queryMemory } = require("../services/vector.service")
 
 function initSocketServer(httpServer) {
 
+    const allowedOrigins = [
+        "http://localhost:5173",
+        "https://ai-chatbot-8mzp.onrender.com"
+    ];
+
     const io = new Server(httpServer, {
         cors: {
-            origin: "http://localhost:5173",
+            origin: allowedOrigins,
             allowedHeaders: [ "Content-Type", "Authorization" ],
             credentials: true
         }

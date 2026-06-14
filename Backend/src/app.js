@@ -10,10 +10,14 @@ const chatRoutes = require("./routes/chat.routes")
 
 const app = express();
 
+const allowedOrigins = [
+    "http://localhost:5173",
+    "https://ai-chatbot-8mzp.onrender.com"
+];
 
 /* Using Middlewares */
 app.use(cors({
-    origin: "http://localhost:5173",
+    origin: allowedOrigins,
     credentials: true
 }));
 app.use(express.json());
