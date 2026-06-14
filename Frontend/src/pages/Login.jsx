@@ -1,135 +1,69 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import axios from "axios";
+import React, { useState } from 'react';
+import { Link,useNavigate } from 'react-router-dom';
+import axios from 'axios';
+
 
 const Login = () => {
-  const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
+    const [ form, setForm ] = useState({ email: '', password: '' });
+    const [ submitting, setSubmitting ] = useState(false);
+    const navigate = useNavigate();
+    
 
-  const handleLoginSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
-    setMessage("");
-    setLoading(true);
-
-    const fd = new FormData(e.target);
-    const email = (fd.get("email") || "").toString().trim();
-    const password = (fd.get("password") || "").toString();
-
-    if (!email || !password) {
-      setError("Please enter both email and password.");
-      setLoading(false);
-      return;
+    function handleChange(e) {
+        const { name, value } = e.target;
+        setForm({ ...form, [name]: value });
     }
 
-    try {
-      const res = await axios.post(
-        "http://localhost:3000/api/auth/login",
-        { email, password },
-        { withCredentials: true }
-      );
+    async function handleSubmit(e) {
+        e.preventDefault();
+        setSubmitting(true);
 
-      const data = res.data;
 
-      if (data?.token) {
-        localStorage.setItem("token", data.token);
-      }
+        console.log(form);
 
-      setMessage("Signed in successfully.");
-      setLoading(false);
-      navigate("/");
-    } catch (err) {
-      const msg = err?.response?.data?.message || err?.message || "Network error";
-      setError(msg);
-      setLoading(false);
+        axios.post("https://ai-chatbot-8mzp.onrender.com/api/auth/login", {
+            email: form.email,
+            password: form.password
+        },
+            {
+                withCredentials: true
+            }
+        ).then((res) => {
+            console.log(res);
+            navigate("/");
+        }).catch((err) => {
+            console.error(err);
+        }).finally(() => {
+            setSubmitting(false);
+        });
+
     }
-  };
 
-  return (
-    <main className="login-design">
-      <section className="login-shell">
-        <div className="login-bot-mark" aria-hidden="true">
-          <span />
+    return (
+        <div className="center-min-h-screen">
+            <div className="auth-card" role="main" aria-labelledby="login-heading">
+                <header className="auth-header">
+                    <h1 id="login-heading">Sign in</h1>
+                    <p className="auth-sub">Welcome back. We've missed you.</p>
+                </header>
+                <form className="auth-form" onSubmit={handleSubmit} noValidate>
+                    <div className="field-group">
+                        <label htmlFor="login-email">Email</label>
+                        <input id="login-email" name="email" type="email" autoComplete="email" placeholder="you@example.com"  onChange={handleChange} required />
+                    </div>
+                    <div className="field-group">
+                        <label htmlFor="login-password">Password</label>
+                        <input id="login-password" name="password" type="password" autoComplete="current-password" placeholder="Your password"  onChange={handleChange} required />
+                    </div>
+                    <button type="submit" className="primary-btn" disabled={submitting}>
+                        {submitting ? 'Signing in...' : 'Sign in'}
+                    </button>
+                </form>
+                <p className="auth-alt">Need an account? <Link to="/register">Create one</Link></p>
+            </div>
         </div>
-
-        <header className="login-heading">
-          <h1>Welcome</h1>
-          <p>Sign in to AI assistant</p>
-        </header>
-
-        <section className="login-panel">
-          <form className="login-form" onSubmit={handleLoginSubmit}>
-            <label className="login-field" htmlFor="login-email">
-              <span>
-                Email <i aria-hidden="true" />
-              </span>
-              <span className="login-input-wrap login-mail-icon">
-                <input
-                  id="login-email"
-                  name="email"
-                  type="email"
-                  placeholder="Enter Email"
-                  autoComplete="email"
-                />
-              </span>
-            </label>
-
-            <label className="login-field" htmlFor="login-password">
-              <span>
-                Password <i aria-hidden="true" />
-                <a href="#">Forgot?</a>
-              </span>
-              <span className="login-input-wrap login-lock-icon">
-                <input
-                  id="login-password"
-                  name="password"
-                  type="password"
-                  placeholder="Enter Password"
-                  autoComplete="current-password"
-                />
-                <button className="login-eye" type="button" aria-label="Show password" />
-              </span>
-            </label>
-
-            <button className="login-submit" type="submit" disabled={loading}>
-              {loading ? "Signing in..." : "Sign In"}
-            </button>
-          </form>
-
-          {error ? (
-            <p className="form-note" style={{ color: "var(--color-accent)" }}>
-              {error}
-            </p>
-          ) : message ? (
-            <p className="form-note">{message}</p>
-          ) : null}
-
-          <div className="login-divider">
-            <span />
-            <strong>Or</strong>
-            <span />
-          </div>
-
-          <div className="login-socials">
-            <button className="login-social" type="button">
-              <span className="login-google" aria-hidden="true">G</span>
-              Google
-            </button>
-            <button className="login-social" type="button">
-              <span className="login-apple" aria-hidden="true">●</span>
-              Apple
-            </button>
-          </div>
-
-          <p className="register-signin">
-            New user? <Link to="/register">Create an account</Link>
-          </p>
-        </section>
-      </section>
-    </main>
-  );
+    );
 };
 
 export default Login;
+

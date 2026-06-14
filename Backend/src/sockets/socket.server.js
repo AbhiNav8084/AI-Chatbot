@@ -12,6 +12,7 @@ function initSocketServer(httpServer) {
     const io = new Server(httpServer, {
         cors: {
             origin: "http://localhost:5173",
+            allowedHeaders: [ "Content-Type", "Authorization" ],
             credentials: true
         }
     })
@@ -44,16 +45,7 @@ function initSocketServer(httpServer) {
     io.on("connection", (socket) => {
 
         socket.on("ai-message", async (messagePayload) => {
-
-            /**
-             * - messagePayload me 2 chiz rehta hai :-
-             * 
-             * messagePayload = {
-             *      chat: chatId
-             *      content: message text content
-             *   } 
-             */
-
+            /* messagePayload = { chat:chatId,content:message text } */
             const [message, vectors] = await Promise.all([
                 messageModel.create({
                     chat: messagePayload.chat,

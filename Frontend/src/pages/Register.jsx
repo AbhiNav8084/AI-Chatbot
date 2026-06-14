@@ -1,179 +1,84 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import axios from "axios";
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import axios from 'axios';
 
 const Register = () => {
-  const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
+    const [ form, setForm ] = useState({ email: '', firstname: '', lastname: '', password: '' });
+    const [ submitting, setSubmitting ] = useState(false);
+    const navigate = useNavigate();
 
-  const handleRegisterSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
-    setMessage("");
-    setLoading(true);
 
-    const fd = new FormData(e.target);
-    const firstname = (fd.get("firstname") || "").toString().trim();
-    const lastname = (fd.get("lastname") || "").toString().trim();
-    const email = (fd.get("email") || "").toString().trim();
-    const password = (fd.get("password") || "").toString();
-    const terms = !!fd.get("terms");
-
-    if (!firstname || !email || !password) {
-      setError("Please fill the required fields.");
-      setLoading(false);
-      return;
+    function handleChange(e) {
+        const { name, value } = e.target;
+        setForm(f => ({ ...f, [ name ]: value }));
     }
 
-    if (!terms) {
-      setError("Please accept the Terms & Conditions.");
-      setLoading(false);
-      return;
+    async function handleSubmit(e) {
+        e.preventDefault();
+        setSubmitting(true);
+        console.log(form);
+
+        axios.post("https://ai-chatbot-8mzp.onrender.com/api/auth/register", {
+            email: form.email,
+            fullName: {
+                firstName: form.firstname,
+                lastName: form.lastname
+            },
+            password: form.password
+        }, {
+            withCredentials: true
+        }).then((res) => {
+            console.log(res);
+            navigate("/");
+        }).catch((err) => {
+            console.error(err);
+            alert('Registration failed (placeholder)');
+        })
+
+        try {
+
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setSubmitting(false);
+        }
     }
 
-    try {
-      const res = await axios.post(
-        "http://localhost:3000/api/auth/register",
-        {
-          fullName: { firstName: firstname, lastName: lastname },
-          email,
-          password,
-        },
-        { withCredentials: true }
-      );
-
-      const data = res.data;
-
-      setMessage(data?.message || "Account created. Redirecting...");
-      setLoading(false);
-      navigate("/");
-    } catch (err) {
-      const msg = err?.response?.data?.message || err?.message || "Network error";
-      setError(msg);
-      setLoading(false);
-    }
-  };
-
-  return (
-    <main className="register-design">
-      <section className="register-panel">
-        <div className="register-mobile-brand" aria-hidden="true">
-          <span className="register-red-dot" />
-          <span className="register-bot-mark">
-            <span />
-          </span>
+    return (
+        <div className="center-min-h-screen">
+            <div className="auth-card" role="main" aria-labelledby="register-heading">
+                <header className="auth-header">
+                    <h1 id="register-heading">Create account</h1>
+                    <p className="auth-sub">Join us and start exploring.</p>
+                </header>
+                <form className="auth-form" onSubmit={handleSubmit} noValidate>
+                    <div className="field-group">
+                        <label htmlFor="email">Email</label>
+                        <input id="email" name="email" type="email" autoComplete="email" placeholder="you@example.com" value={form.email} onChange={handleChange} required />
+                    </div>
+                    <div className="grid-2">
+                        <div className="field-group">
+                            <label htmlFor="firstname">First name</label>
+                            <input id="firstname" name="firstname" placeholder="Jane" value={form.firstname} onChange={handleChange} required />
+                        </div>
+                        <div className="field-group">
+                            <label htmlFor="lastname">Last name</label>
+                            <input id="lastname" name="lastname" placeholder="Doe" value={form.lastname} onChange={handleChange} required />
+                        </div>
+                    </div>
+                    <div className="field-group">
+                        <label htmlFor="password">Password</label>
+                        <input id="password" name="password" type="password" autoComplete="new-password" placeholder="Create a password" value={form.password} onChange={handleChange} required minLength={6} />
+                    </div>
+                    <button type="submit" className="primary-btn" disabled={submitting}>
+                        {submitting ? 'Creating...' : 'Create Account'}
+                    </button>
+                </form>
+                <p className="auth-alt">Already have an account? <Link to="/login">Sign in</Link></p>
+            </div>
         </div>
-
-        <header className="register-heading">
-          <h1>
-            Create Account
-            <span className="register-title-dot" aria-hidden="true" />
-          </h1>
-          <p>Join to start conversing with AI.</p>
-        </header>
-
-        <form className="register-form" onSubmit={handleRegisterSubmit}>
-          <div className="register-row">
-            <label className="register-field" htmlFor="register-firstname">
-              <span>First Name</span>
-              <span className="register-input-wrap register-user-icon">
-                <input
-                  id="register-firstname"
-                  name="firstname"
-                  type="text"
-                  placeholder="First"
-                  autoComplete="given-name"
-                />
-              </span>
-            </label>
-
-            <label className="register-field" htmlFor="register-lastname">
-              <span>Last Name</span>
-              <span className="register-input-wrap register-user-icon">
-                <input
-                  id="register-lastname"
-                  name="lastname"
-                  type="text"
-                  placeholder="name"
-                  autoComplete="family-name"
-                />
-              </span>
-            </label>
-          </div>
-
-          <label className="register-field" htmlFor="register-email">
-            <span>Email Address</span>
-            <span className="register-input-wrap register-mail-icon">
-              <input
-                id="register-email"
-                name="email"
-                type="email"
-                placeholder="name@domain.com"
-                autoComplete="email"
-              />
-            </span>
-          </label>
-
-          <label className="register-field" htmlFor="register-password">
-            <span>Create Password</span>
-            <span className="register-input-wrap register-lock-icon">
-              <input
-                id="register-password"
-                name="password"
-                type="password"
-                placeholder="........"
-                autoComplete="new-password"
-              />
-            </span>
-          </label>
-
-          <label className="register-terms" htmlFor="register-terms">
-            <input id="register-terms" name="terms" type="checkbox" />
-            <span>
-              I agree to the <a href="#">Terms & Conditions</a>
-            </span>
-          </label>
-
-          <button className="register-submit" type="submit" disabled={loading}>
-            {loading ? "Creating..." : (
-              <>
-                Create Account <span aria-hidden="true">-&gt;</span>
-              </>
-            )}
-          </button>
-        </form>
-
-        {error ? (
-          <p className="form-note" style={{ color: "var(--color-accent)" }}>{error}</p>
-        ) : message ? (
-          <p className="form-note">{message}</p>
-        ) : null}
-
-        <div className="register-divider">
-          <span />
-          <strong>Or</strong>
-          <span />
-        </div>
-
-        <div className="register-socials">
-          <button className="register-social" type="button">
-            <span className="register-google" aria-hidden="true">G</span>
-            Continue with Google
-          </button>
-          <button className="register-social" type="button">
-            <span className="register-apple" aria-hidden="true" />
-            Continue with Apple
-          </button>
-        </div>
-
-        <p className="register-signin">
-          Already have an account? <Link to="/login">Sign In</Link>
-        </p>
-      </section>
-    </main>
-  );
+    );
 };
 
 export default Register;
+

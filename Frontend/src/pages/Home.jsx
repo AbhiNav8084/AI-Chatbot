@@ -1,216 +1,164 @@
-import { useEffect, useRef, useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
-import axios from "axios";
+import React, { useCallback, useEffect, useState } from 'react';
 import { io } from "socket.io-client";
-
-import ChatInput from "../components/ChatInput.jsx";
-import ChatMessages from "../components/ChatMessages.jsx";
-import ChatSidebar from "../components/ChatSidebar.jsx";
-import ChatTopbar from "../components/ChatTopbar.jsx";
-import "../styles/home.css";
+import ChatMobileBar from '../components/chat/ChatMobileBar.jsx';
+import ChatSidebar from '../components/chat/ChatSidebar.jsx';
+import ChatMessages from '../components/chat/ChatMessages.jsx';
+import ChatComposer from '../components/chat/ChatComposer.jsx';
+import '../components/chat/ChatLayout.css';
+import { fakeAIReply } from '../components/chat/aiClient.js';
+import { useDispatch, useSelector } from 'react-redux';
+import axios from 'axios';
 import {
-  addChat,
-  appendMessage,
-  clearMessages,
-  setChats,
-  setCurrentChat,
-} from "../store/chatSlice.js";
+  ensureInitialChat,
+  startNewChat,
+  selectChat,
+  setInput,
+  sendingStarted,
+  sendingFinished,
+  addUserMessage,
+  addAIMessage,
+  setChats
+} from '../store/chatSlice.js';
 
-const API_URL = "http://localhost:3000";
-
-export default function Home() {
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [userInput, setUserInput] = useState("");
-  const [isAiTyping, setIsAiTyping] = useState(false);
-  const [connectionError, setConnectionError] = useState("");
-  const [hasAttemptedChat, setHasAttemptedChat] = useState(false);
-
+const Home = () => {
   const dispatch = useDispatch();
-  const messages = useSelector((state) => state.chat?.messages ?? []);
-  const previousChats = useSelector((state) => state.chat?.chats ?? []);
-  const activeChat = useSelector((state) => state.chat?.currentChat ?? null);
+  const chats = useSelector(state => state.chat.chats);
+  const activeChatId = useSelector(state => state.chat.activeChatId);
+  const input = useSelector(state => state.chat.input);
+  const isSending = useSelector(state => state.chat.isSending);
+  const [ sidebarOpen, setSidebarOpen ] = React.useState(false);
+  const [ socket, setSocket ] = useState(null);
 
-  const canvasRef = useRef(null);
-  const socketRef = useRef(null);
+  const activeChat = chats.find(c => c.id === activeChatId) || null;
 
-  useEffect(() => {
-    const fetchChats = async () => {
-      try {
-        const res = await axios.get(`${API_URL}/api/chat`, {
-          withCredentials: true,
-        });
-
-        const chats = res.data.chats || [];
-        dispatch(setChats(chats));
-        if (chats.length > 0) {
-          dispatch(setCurrentChat(chats[0]));
-        }
-      } catch (err) {
-        console.warn("Failed to load chats:", err);
-      }
-    };
-
-    fetchChats();
-  }, [dispatch]);
-
-  useEffect(() => {
-    const socket = io(API_URL, {
-      withCredentials: true,
-      transports: ["websocket"],
-    });
-
-    socketRef.current = socket;
-
-    socket.on("connect", () => {
-      setConnectionError("");
-    });
-
-    socket.on("connect_error", (err) => {
-      setIsAiTyping(false);
-      setConnectionError(err.message || "Unable to connect to AI.");
-    });
-
-    socket.on("ai-response", (payload) => {
-      const aiMessage = {
-        id: `${payload.chat}-${Date.now()}`,
-        role: "assistant",
-        text: payload.content,
-      };
-
-      dispatch(appendMessage(aiMessage));
-      setIsAiTyping(false);
-    });
-
-    return () => {
-      socket.disconnect();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (canvasRef.current) {
-      canvasRef.current.scrollTop = canvasRef.current.scrollHeight;
-    }
-  }, [messages, isAiTyping]);
-
-
-  const createChat = async (titleInput = "") => {
-    const title = titleInput.trim() ? titleInput.trim().slice(0, 42) : "New Chat";
-
-    const res = await axios.post(
-      `${API_URL}/api/chat`,
-      { title },
-      { withCredentials: true }
-    );
-
-    const chat = res.data.chat;
-
-    dispatch(addChat(chat));
-    dispatch(setCurrentChat(chat));
-    dispatch(clearMessages());
-
-    return chat;
-  };
+  const [ messages, setMessages ] = useState([
+  ]);
 
   const handleNewChat = async () => {
-    const titlePrompt = window.prompt("Enter a title for the new chat:", "New Chat");
-    if (titlePrompt === null) return;
+    // Prompt user for title of new chat, fallback to 'New Chat'
+    let title = window.prompt('Enter a title for the new chat:', '');
+    if (title) title = title.trim();
+    if (!title) return
 
-    setUserInput("");
-    setIsAiTyping(false);
-    setConnectionError("");
-    setHasAttemptedChat(false);
-    setMobileOpen(false);
-    dispatch(clearMessages());
+    const response = await axios.post("https://ai-chatbot-8mzp.onrender.com/api/chat", {
+      title
+    }, {
+      withCredentials: true
+    })
+    getMessages(response.data.chat._id);
+    dispatch(startNewChat(response.data.chat));
+    setSidebarOpen(false);
+  }
 
-    try {
-      await createChat(titlePrompt);
-    } catch (err) {
-      setConnectionError(
-        err?.response?.data?.message || err.message || "Unable to create new chat."
-      );
-    }
-  };
+  // Ensure at least one chat exists initially
+  useEffect(() => {
 
-  const handleSelectChat = (chat) => {
-    dispatch(setCurrentChat(chat));
-    dispatch(clearMessages());
-    setMobileOpen(false);
-    setConnectionError("");
-    setHasAttemptedChat(false);
-  };
+    axios.get("https://ai-chatbot-8mzp.onrender.com/api/chat", { withCredentials: true })
+      .then(response => {
+        dispatch(setChats(response.data.chats.reverse()));
+      })
 
-  const handleSend = async (e) => {
-    e.preventDefault();
+    const tempSocket = io("https://ai-chatbot-8mzp.onrender.com", {
+      withCredentials: true,
+    })
 
-    const content = userInput.trim();
-    if (!content || isAiTyping) return;
+    tempSocket.on("ai-response", (messagePayload) => {
+      console.log("Received AI response:", messagePayload);
 
-    const userMessage = {
-      id: Date.now(),
-      role: "user",
-      text: content,
-    };
+      setMessages((prevMessages) => [ ...prevMessages, {
+        type: 'ai',
+        content: messagePayload.content
+      } ]);
 
-    dispatch(appendMessage(userMessage));
-    setUserInput("");
-    setConnectionError("");
-    setHasAttemptedChat(true);
-    setIsAiTyping(true);
+      dispatch(sendingFinished());
+    });
 
-    try {
-      const chat = activeChat || (await createChat(content));
+    setSocket(tempSocket);
 
-      socketRef.current?.emit("ai-message", {
-        chat: chat._id,
-        content,
-      });
-    } catch (err) {
-      setIsAiTyping(false);
-      setConnectionError(
-        err?.response?.data?.message || err.message || "Message failed."
-      );
-    }
-  };
+  }, []);
 
-  return (
-    <main className="home">
-      <ChatSidebar
-        activeChat={activeChat}
-        mobileOpen={mobileOpen}
-        onNewChat={handleNewChat}
-        onSelectChat={handleSelectChat}
-        previousChats={previousChats}
-      />
+  const sendMessage = async () => {
 
-      {mobileOpen && (
-        <div className="overlay" onClick={() => setMobileOpen(false)} />
-      )}
+    const trimmed = input.trim();
+    console.log("Sending message:", trimmed);
+    if (!trimmed || !activeChatId || isSending) return;
+    dispatch(sendingStarted());
 
-      <section className="chat-section">
-        <ChatTopbar
-          onNewChat={handleNewChat}
-          onOpenSidebar={() => setMobileOpen(true)}
-        />
+    const newMessages = [ ...messages, {
+      type: 'user',
+      content: trimmed
+    } ];
 
-        <ChatMessages
-          connectionError={connectionError}
-          hasAttemptedChat={hasAttemptedChat}
-          isAiTyping={isAiTyping}
-          messages={messages}
-          ref={canvasRef}
-        />
+    console.log("New messages:", newMessages);
 
-        <ChatInput
-          isAiTyping={isAiTyping}
-          onInputChange={setUserInput}
-          onSend={handleSend}
-          userInput={userInput}
-        />
+    setMessages(newMessages);
+    dispatch(setInput(''));
 
-        <div className="footer-note">
-          AI CAN MAKE MISTAKES. CHECK IMPORTANT INFO.
+    socket.emit("ai-message", {
+      chat: activeChatId,
+      content: trimmed
+    })
+
+  }
+
+  const getMessages = async (chatId) => {
+
+   const response = await  axios.get(`https://ai-chatbot-8mzp.onrender.com/api/chat/messages/${chatId}`, { withCredentials: true })
+
+   console.log("Fetched messages:", response.data.messages);
+
+   setMessages(response.data.messages.map(m => ({
+     type: m.role === 'user' ? 'user' : 'ai',
+     content: m.content
+   })));
+
+  }
+
+
+return (
+  <div className="chat-layout minimal">
+    <ChatMobileBar
+      onToggleSidebar={() => setSidebarOpen(o => !o)}
+      onNewChat={handleNewChat}
+    />
+    <ChatSidebar
+      chats={chats}
+      activeChatId={activeChatId}
+      onSelectChat={(id) => {
+        dispatch(selectChat(id));
+        setSidebarOpen(false);
+        getMessages(id);
+      }}
+      onNewChat={handleNewChat}
+      open={sidebarOpen}
+    />
+    <main className="chat-main" role="main">
+      {messages.length === 0 && (
+        <div className="chat-welcome" aria-hidden="true">
+          <div className="chip">Early Preview</div>
+          <h1>ChatGPT Clone</h1>
+          <p>Ask anything. Paste text, brainstorm ideas, or get quick explanations. Your chats stay in the sidebar so you can pick up where you left off.</p>
         </div>
-      </section>
+      )}
+      <ChatMessages messages={messages} isSending={isSending} />
+      {
+        activeChatId &&
+        <ChatComposer
+          input={input}
+          setInput={(v) => dispatch(setInput(v))}
+          onSend={sendMessage}
+          isSending={isSending}
+        />}
     </main>
-  );
-}
+    {sidebarOpen && (
+      <button
+        className="sidebar-backdrop"
+        aria-label="Close sidebar"
+        onClick={() => setSidebarOpen(false)}
+      />
+    )}
+  </div>
+);
+};
+
+export default Home;
