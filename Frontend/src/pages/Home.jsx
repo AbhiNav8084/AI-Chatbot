@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { io } from "socket.io-client";
+import { useNavigate } from 'react-router-dom';
 import ChatMobileBar from '../components/chat/ChatMobileBar.jsx';
 import ChatSidebar from '../components/chat/ChatSidebar.jsx';
 import ChatMessages from '../components/chat/ChatMessages.jsx';
@@ -22,12 +23,17 @@ import {
 
 const Home = () => {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const chats = useSelector(state => state.chat.chats);
   const activeChatId = useSelector(state => state.chat.activeChatId);
   const input = useSelector(state => state.chat.input);
   const isSending = useSelector(state => state.chat.isSending);
   const [ sidebarOpen, setSidebarOpen ] = React.useState(false);
   const [ socket, setSocket ] = useState(null);
+  const [ user, setUser ] = useState(null);
+  const [ authChecking, setAuthChecking ] = useState(true);
+  const [ settingsOpen, setSettingsOpen ] = useState(false);
+  const [ loggingOut, setLoggingOut ] = useState(false);
 
   const activeChat = chats.find(c => c.id === activeChatId) || null;
 
@@ -50,32 +56,58 @@ const Home = () => {
     setSidebarOpen(false);
   }
 
-  // Ensure at least one chat exists initially
+  // Ensure the user is logged in before loading chats.
   useEffect(() => {
 
-    axios.get("https://ai-chatbot-8mzp.onrender.com/api/chat", { withCredentials: true })
-      .then(response => {
-        dispatch(setChats(response.data.chats.reverse()));
-      })
+    let tempSocket;
+    let cancelled = false;
 
-    const tempSocket = io("https://ai-chatbot-8mzp.onrender.com", {
-      withCredentials: true,
-    })
+    async function bootChat() {
+      try {
+        const authResponse = await axios.get("https://ai-chatbot-8mzp.onrender.com/api/auth/me", { withCredentials: true });
 
-    tempSocket.on("ai-response", (messagePayload) => {
-      console.log("Received AI response:", messagePayload);
+        if (cancelled) return;
 
-      setMessages((prevMessages) => [ ...prevMessages, {
-        type: 'ai',
-        content: messagePayload.content
-      } ]);
+        setUser(authResponse.data.user);
 
-      dispatch(sendingFinished());
-    });
+        const chatsResponse = await axios.get("https://ai-chatbot-8mzp.onrender.com/api/chat", { withCredentials: true });
 
-    setSocket(tempSocket);
+        if (cancelled) return;
 
-  }, []);
+        dispatch(setChats(chatsResponse.data.chats.reverse()));
+
+        tempSocket = io("https://ai-chatbot-8mzp.onrender.com", {
+          withCredentials: true,
+        })
+
+        tempSocket.on("ai-response", (messagePayload) => {
+          console.log("Received AI response:", messagePayload);
+
+          setMessages((prevMessages) => [ ...prevMessages, {
+            type: 'ai',
+            content: messagePayload.content
+          } ]);
+
+          dispatch(sendingFinished());
+        });
+
+        setSocket(tempSocket);
+      } catch (err) {
+        console.error(err);
+        navigate('/login', { replace: true });
+      } finally {
+        if (!cancelled) setAuthChecking(false);
+      }
+    }
+
+    bootChat();
+
+    return () => {
+      cancelled = true;
+      tempSocket?.disconnect();
+    };
+
+  }, [ dispatch, navigate ]);
 
   const sendMessage = async () => {
 
@@ -93,6 +125,11 @@ const Home = () => {
 
     setMessages(newMessages);
     dispatch(setInput(''));
+
+    if (!socket) {
+      dispatch(sendingFinished());
+      return;
+    }
 
     socket.emit("ai-message", {
       chat: activeChatId,
@@ -114,12 +151,47 @@ const Home = () => {
 
   }
 
+  const handleLogout = async () => {
+    setLoggingOut(true);
+
+    try {
+      await axios.post("https://ai-chatbot-8mzp.onrender.com/api/auth/logout", {}, {
+        withCredentials: true
+      });
+    } catch (err) {
+      console.error(err);
+    } finally {
+      socket?.disconnect();
+      setLoggingOut(false);
+      navigate('/login', { replace: true });
+    }
+  }
+
+  const displayName = user?.fullName
+    ? `${user.fullName.firstName || ''} ${user.fullName.lastName || ''}`.trim()
+    : '';
+
+  if (authChecking) {
+    return (
+      <div className="chat-layout minimal">
+        <main className="chat-main auth-loading" role="main">
+          <div className="chat-welcome" aria-hidden="true">
+            <div className="chip">Loading</div>
+            <h1>Checking session</h1>
+            <p>Please wait while your account is verified.</p>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
 
 return (
   <div className="chat-layout minimal">
     <ChatMobileBar
       onToggleSidebar={() => setSidebarOpen(o => !o)}
       onNewChat={handleNewChat}
+      onOpenSettings={() => setSettingsOpen(true)}
     />
     <ChatSidebar
       chats={chats}
@@ -130,6 +202,11 @@ return (
         getMessages(id);
       }}
       onNewChat={handleNewChat}
+      onOpenSettings={() => {
+        setSidebarOpen(false);
+        setSettingsOpen(true);
+      }}
+      user={user}
       open={sidebarOpen}
     />
     <main className="chat-main" role="main">
@@ -156,6 +233,35 @@ return (
         aria-label="Close sidebar"
         onClick={() => setSidebarOpen(false)}
       />
+    )}
+    {settingsOpen && (
+      <div className="settings-overlay" role="presentation" onMouseDown={() => setSettingsOpen(false)}>
+        <section className="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title" onMouseDown={(e) => e.stopPropagation()}>
+          <header className="settings-header">
+            <div>
+              <p>Settings</p>
+              <h2 id="settings-title">Account</h2>
+            </div>
+            <button className="settings-close" type="button" onClick={() => setSettingsOpen(false)} aria-label="Close settings">Close</button>
+          </header>
+          <div className="settings-profile">
+            <div className="settings-profile-avatar" aria-hidden="true">
+              {(displayName || user?.email || 'U').charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <span>Username</span>
+              <strong>{displayName || 'User'}</strong>
+            </div>
+          </div>
+          <div className="settings-row">
+            <span>Email</span>
+            <strong>{user?.email || 'Not available'}</strong>
+          </div>
+          <button className="logout-btn" type="button" onClick={handleLogout} disabled={loggingOut}>
+            {loggingOut ? 'Logging out...' : 'Logout'}
+          </button>
+        </section>
+      </div>
     )}
   </div>
 );

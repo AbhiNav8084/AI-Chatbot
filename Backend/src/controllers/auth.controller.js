@@ -79,8 +79,38 @@ async function loginUser(req, res) {
 
 }
 
+async function getCurrentUser(req, res) {
+
+    const user = req.user;
+
+    if (!user) {
+        return res.status(401).json({
+            message: "Unauthorized"
+        });
+    }
+
+    res.status(200).json({
+        user: {
+            email: user.email,
+            _id: user._id,
+            fullName: user.fullName
+        }
+    })
+}
+
+async function logoutUser(req, res) {
+
+    res.clearCookie("token", cookieOptions);
+
+    res.status(200).json({
+        message: "User logged out successfully"
+    })
+}
+
 
 module.exports={
     registerUser,
-    loginUser
+    loginUser,
+    getCurrentUser,
+    logoutUser
 }

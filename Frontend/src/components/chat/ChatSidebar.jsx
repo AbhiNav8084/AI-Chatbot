@@ -2,8 +2,11 @@ import React from 'react';
 import './ChatSidebar.css';
 
 
-const ChatSidebar = ({ chats, activeChatId, onSelectChat, onNewChat, open }) => {
+const ChatSidebar = ({ chats, activeChatId, onSelectChat, onNewChat, onOpenSettings, user, open }) => {
 
+  const displayName = user?.fullName
+    ? `${user.fullName.firstName || ''} ${user.fullName.lastName || ''}`.trim()
+    : '';
 
   
   return (
@@ -24,6 +27,17 @@ const ChatSidebar = ({ chats, activeChatId, onSelectChat, onNewChat, open }) => 
         ))}
         {chats.length === 0 && <p className="empty-hint">No chats yet.</p>}
       </nav>
+      <div className="sidebar-footer">
+        <button className="settings-btn" onClick={onOpenSettings} type="button">
+          <span className="settings-avatar" aria-hidden="true">
+            {(displayName || user?.email || 'U').charAt(0).toUpperCase()}
+          </span>
+          <span className="settings-user">
+            <span>{displayName || 'Account'}</span>
+            <small>{user?.email || 'Settings'}</small>
+          </span>
+        </button>
+      </div>
     </aside>
   );
 };
